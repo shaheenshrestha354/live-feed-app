@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emotional Landscape Mirror</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Emotional Landscape Mirror</h1>
+    <nav class="nav">
+      <a href="index.html">Live Feed</a>
+      <a href="slitscan.html">Slitscan</a>
+      <a href="swirl.html">Hand Swirl</a>
+      <a href="wink.html">Wink Emojis</a>
+    </nav>
+    <span id="status" class="status offline">Offline</span>
+  </header>
+
+  <main>
+    <p class="hint">A tiny world that breathes with you. Sit still, smile, or drift off &mdash; the light, fog, wind, and small creatures quietly respond. Nothing is measured or shown as numbers; it's just a mirror, made of weather. Runs entirely in your browser &mdash; no video or image ever leaves your device, and your camera stays hidden unless you choose to preview it below. First load downloads a small ML model, so it needs an internet connection once.</p>
+
+    <div class="video-wrap">
+      <canvas id="landscapeCanvas"></canvas>
+      <video id="video" autoplay playsinline muted class="pip mirror pip-off"></video>
+      <p id="message" class="message"></p>
+    </div>
+
+    <div class="controls">
+      <label class="checkbox-label"><input type="checkbox" id="showCamera"> Preview my camera</label>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Begin</button>
+      <button id="stopBtn" disabled>Pause</button>
+      <button id="saveBtn" disabled>Save PNG</button>
+    </div>
+  </main>
+
+  <script type="module" src="landscape.js"></script>
+</body>
+</html>

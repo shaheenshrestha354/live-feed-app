@@ -73,7 +73,7 @@ main {
   position: relative;
 }
 
-video, #phoneFeed, #scanCanvas, #swirlCanvas, #winkCanvas {
+video, #phoneFeed, #scanCanvas, #swirlCanvas, #winkCanvas, #landscapeCanvas {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -82,6 +82,14 @@ video, #phoneFeed, #scanCanvas, #swirlCanvas, #winkCanvas {
 
 video.mirror {
   transform: scaleX(-1);
+}
+
+/* Keeps the video element decoding frames (needed for face tracking) while
+   making it visually invisible — unlike display:none, which can pause decode
+   in some browsers. */
+video.pip-off {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .video-wrap:fullscreen,
