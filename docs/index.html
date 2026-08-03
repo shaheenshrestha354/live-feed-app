@@ -12,16 +12,20 @@
     <nav class="nav">
       <a href="slitscan.html">Slitscan</a>
       <a href="swirl.html">Hand Swirl</a>
-      <a href="wink.html">Wink Words</a>
+      <a href="wink.html">Wink Emojis</a>
     </nav>
     <span id="status" class="status offline">Offline</span>
   </header>
 
   <main>
-    <p class="hint">This hosted version shows your device's own camera only. Phone-to-laptop streaming needs the server running locally &mdash; see the <a href="https://github.com/shaheenshrestha354/live-feed-app">README</a>.</p>
+    <div class="source-toggle">
+      <label><input type="radio" name="source" value="laptop" checked> This laptop's camera</label>
+      <label><input type="radio" name="source" value="phone"> Phone camera</label>
+    </div>
 
     <div class="video-wrap">
       <video id="video" autoplay playsinline muted></video>
+      <img id="phoneFeed" class="hidden" alt="Phone camera feed">
       <p id="message" class="message"></p>
     </div>
 
@@ -30,6 +34,12 @@
       <button id="startBtn">Start</button>
       <button id="stopBtn" disabled>Stop</button>
       <button id="snapshotBtn" disabled>Snapshot</button>
+    </div>
+
+    <div id="phoneControls" class="phone-info hidden">
+      <p>On your phone (same WiFi), open:</p>
+      <ul id="phoneUrls" class="phone-urls"></ul>
+      <p class="hint">Your phone's browser will warn about the certificate the first time &mdash; tap "Advanced" / "Visit site" to continue, then allow camera access.</p>
     </div>
 
     <canvas id="canvas" class="hidden"></canvas>

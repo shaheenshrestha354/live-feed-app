@@ -21,7 +21,7 @@ const MAX_DIMENSION = 480;
 const WINK_ON = 0.5; // eye counts as "closed" above this blendshape score
 const WINK_OFF = 0.28; // eye counts as "open" below this (hysteresis gap avoids re-triggering on noise)
 const PARTICLE_LIFETIME_MS = 1600;
-const DEFAULT_WORDS = ['POW!', 'WOW!', 'MAGIC', 'BOOM', 'ZAP!', 'WINK!', 'SURPRISE', '✨'];
+const DEFAULT_WORDS = ['😉', '✨', '🎉', '💥', '🌈', '🔥', '🤩', '💫', '🌟', '😜'];
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
@@ -137,7 +137,6 @@ function spawnBurst(cx, cy) {
       y: cy,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      hue: Math.floor(Math.random() * 360),
       bornAt: now,
     });
   }
@@ -156,13 +155,14 @@ function updateAndDrawParticles(now, dtSec) {
     const scale = 1 + progress * 0.6;
 
     ctx.save();
+    ctx.filter = 'none'; // always draw particles in their true color, regardless of the active color effect
     ctx.globalAlpha = Math.max(0, alpha);
     ctx.translate(p.x, p.y);
     ctx.scale(scale, scale);
     ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = `hsl(${p.hue}, 90%, 65%)`;
+    ctx.fillStyle = '#ffffff'; // only matters for plain-text particles; emoji glyphs render in native color regardless
     ctx.fillText(p.text, 0, 0);
     ctx.restore();
   });
@@ -176,7 +176,6 @@ function cycleColorEffect() {
     }
   }
   colorEffectIndex = next;
-  canvas.style.filter = COLOR_EFFECTS[colorEffectIndex].filter;
   if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[colorEffectIndex].name;
 }
 
@@ -210,8 +209,11 @@ let lastFrameAt = 0;
 
 function loop(timestamp) {
   if (video.videoWidth && video.videoHeight) {
-    // Mirror the camera for a natural "look in a mirror" feel.
+    // Mirror the camera for a natural "look in a mirror" feel. The color effect
+    // is applied only to this draw call so particles drawn afterward (words/emoji)
+    // always render in their true, unfiltered color.
     ctx.save();
+    ctx.filter = COLOR_EFFECTS[colorEffectIndex].filter;
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -271,7 +273,6 @@ async function start() {
     leftWinking = false;
     rightWinking = false;
     colorEffectIndex = 0;
-    canvas.style.filter = COLOR_EFFECTS[0].filter;
     if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[0].name;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
@@ -305,7 +306,7 @@ function saveImage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `wink-words-${Date.now()}.png`;
+    a.download = `wink-emojis-${Date.now()}.png`;
     a.click();
     URL.revokeObjectURL(url);
   }, 'image/png');
