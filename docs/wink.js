@@ -15,7 +15,6 @@ const stopBtn = document.getElementById('stopBtn');
 const saveBtn = document.getElementById('saveBtn');
 const statusEl = document.getElementById('status');
 const messageEl = document.getElementById('message');
-const effectLabelEl = document.getElementById('effectLabel');
 
 const MAX_DIMENSION = 480;
 const WINK_ON = 0.5; // eye counts as "closed" above this blendshape score
@@ -30,16 +29,17 @@ const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/was
 const RIGHT_EYE_IDX = [33, 133, 159, 145, 153, 144, 163, 7];
 const LEFT_EYE_IDX = [362, 263, 386, 374, 380, 373, 390, 249];
 
-const COLOR_EFFECTS = [
-  { name: 'Normal', filter: 'none' },
-  { name: 'Invert', filter: 'invert(1)' },
-  { name: 'Neon', filter: 'saturate(3) hue-rotate(90deg) contrast(1.2)' },
-  { name: 'Sepia Dream', filter: 'sepia(1) saturate(3) hue-rotate(300deg)' },
-  { name: 'Cool Blue', filter: 'hue-rotate(200deg) saturate(1.8)' },
-  { name: 'Grayscale Pop', filter: 'grayscale(1) contrast(1.4) brightness(1.1)' },
-  { name: 'Solarize', filter: 'invert(1) hue-rotate(180deg) saturate(2)' },
-  { name: 'Warm Glow', filter: 'sepia(0.6) saturate(2) hue-rotate(-20deg) brightness(1.1)' },
-];
+const SEPIA_FILTER = 'sepia(1) saturate(3) hue-rotate(300deg)';
+
+// How much the face has to move (in canvas px/sec) before the swirl kicks in, and
+// how that speed maps to swirl strength. Tuned so small jitter doesn't trigger it.
+const FACE_DISTORT_SENSITIVITY = 0.02;
+const FACE_DISTORT_MAX_STRENGTH = 10;
+const FACE_DISTORT_MIN_STRENGTH = 0.4;
+const FACE_DISTORT_RADIUS_MULTIPLIER = 2.2; // relative to eye distance, so it scales with face size
+const FACE_DISTORT_RADIUS_MIN = 40;
+const FACE_DISTORT_RADIUS_MAX = 220;
+const NOSE_TIP_IDX = 1;
 
 let currentStream = null;
 let rafId = null;
@@ -48,7 +48,8 @@ let modelReady = false;
 let particles = [];
 let leftWinking = false;
 let rightWinking = false;
-let colorEffectIndex = 0;
+let prevFaceCenter = null;
+let prevFaceAt = 0;
 
 function setStatus(live) {
   statusEl.textContent = live ? 'Live' : 'Offline';
@@ -124,6 +125,40 @@ function eyeCenter(landmarks, indices) {
   return { x: canvas.width - rawX, y: rawY };
 }
 
+function applySwirl(imageData, width, height, cx, cy, radius, angle) {
+  const src = imageData.data;
+  const out = new Uint8ClampedArray(src);
+  const minX = Math.max(0, Math.floor(cx - radius));
+  const maxX = Math.min(width - 1, Math.ceil(cx + radius));
+  const minY = Math.max(0, Math.floor(cy - radius));
+  const maxY = Math.min(height - 1, Math.ceil(cy + radius));
+  const radius2 = radius * radius;
+
+  for (let y = minY; y <= maxY; y++) {
+    const dy0 = y - cy;
+    for (let x = minX; x <= maxX; x++) {
+      const dx0 = x - cx;
+      const d2 = dx0 * dx0 + dy0 * dy0;
+      if (d2 > radius2) continue;
+      const d = Math.sqrt(d2);
+      const percent = (radius - d) / radius;
+      const theta = percent * percent * angle;
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      const srcX = Math.round(cx + dx0 * cosT - dy0 * sinT);
+      const srcY = Math.round(cy + dx0 * sinT + dy0 * cosT);
+      if (srcX < 0 || srcX >= width || srcY < 0 || srcY >= height) continue;
+      const srcIdx = (srcY * width + srcX) * 4;
+      const dstIdx = (y * width + x) * 4;
+      out[dstIdx] = src[srcIdx];
+      out[dstIdx + 1] = src[srcIdx + 1];
+      out[dstIdx + 2] = src[srcIdx + 2];
+      out[dstIdx + 3] = src[srcIdx + 3];
+    }
+  }
+  return new ImageData(out, width, height);
+}
+
 function spawnBurst(cx, cy) {
   const words = getWordList();
   const count = Number(countSlider.value);
@@ -155,7 +190,7 @@ function updateAndDrawParticles(now, dtSec) {
     const scale = 1 + progress * 0.6;
 
     ctx.save();
-    ctx.filter = 'none'; // always draw particles in their true color, regardless of the active color effect
+    ctx.filter = 'none'; // always draw particles in their true color, regardless of the sepia effect
     ctx.globalAlpha = Math.max(0, alpha);
     ctx.translate(p.x, p.y);
     ctx.scale(scale, scale);
@@ -166,17 +201,6 @@ function updateAndDrawParticles(now, dtSec) {
     ctx.fillText(p.text, 0, 0);
     ctx.restore();
   });
-}
-
-function cycleColorEffect() {
-  let next = colorEffectIndex;
-  if (COLOR_EFFECTS.length > 1) {
-    while (next === colorEffectIndex) {
-      next = Math.floor(Math.random() * COLOR_EFFECTS.length);
-    }
-  }
-  colorEffectIndex = next;
-  if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[colorEffectIndex].name;
 }
 
 function checkWinks(blendshapes, eyeL, eyeR) {
@@ -190,7 +214,6 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
   if (isLeftWink && !leftWinking) {
     spawnBurst(eyeL.x, eyeL.y);
-    cycleColorEffect();
     leftWinking = true;
   } else if (leftScore < WINK_OFF) {
     leftWinking = false;
@@ -198,7 +221,6 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
   if (isRightWink && !rightWinking) {
     spawnBurst(eyeR.x, eyeR.y);
-    cycleColorEffect();
     rightWinking = true;
   } else if (rightScore < WINK_OFF) {
     rightWinking = false;
@@ -207,13 +229,40 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
 let lastFrameAt = 0;
 
+function applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp) {
+  const faceCenter = eyeCenter(landmarks, [NOSE_TIP_IDX]);
+
+  if (prevFaceCenter) {
+    const dtSec = (timestamp - prevFaceAt) / 1000;
+    if (dtSec > 0) {
+      const dx = faceCenter.x - prevFaceCenter.x;
+      const dy = faceCenter.y - prevFaceCenter.y;
+      const speed = Math.hypot(dx, dy) / dtSec; // canvas px/sec
+      const strength = Math.min(FACE_DISTORT_MAX_STRENGTH, speed * FACE_DISTORT_SENSITIVITY);
+
+      if (strength > FACE_DISTORT_MIN_STRENGTH) {
+        const eyeDist = Math.hypot(eyeR.x - eyeL.x, eyeR.y - eyeL.y);
+        const radius = Math.min(
+          FACE_DISTORT_RADIUS_MAX,
+          Math.max(FACE_DISTORT_RADIUS_MIN, eyeDist * FACE_DISTORT_RADIUS_MULTIPLIER)
+        );
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const warped = applySwirl(frame, canvas.width, canvas.height, faceCenter.x, faceCenter.y, radius, strength);
+        ctx.putImageData(warped, 0, 0);
+      }
+    }
+  }
+  prevFaceCenter = faceCenter;
+  prevFaceAt = timestamp;
+}
+
 function loop(timestamp) {
   if (video.videoWidth && video.videoHeight) {
-    // Mirror the camera for a natural "look in a mirror" feel. The color effect
-    // is applied only to this draw call so particles drawn afterward (words/emoji)
+    // Mirror the camera for a natural "look in a mirror" feel. The sepia effect
+    // is applied only to this draw call so particles drawn afterward (emoji)
     // always render in their true, unfiltered color.
     ctx.save();
-    ctx.filter = COLOR_EFFECTS[colorEffectIndex].filter;
+    ctx.filter = SEPIA_FILTER;
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -228,6 +277,7 @@ function loop(timestamp) {
         const eyeL = eyeCenter(landmarks, LEFT_EYE_IDX);
         const eyeR = eyeCenter(landmarks, RIGHT_EYE_IDX);
         checkWinks(blendshapes, eyeL, eyeR);
+        applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp);
 
         if (showLandmarksCheckbox.checked) {
           ctx.fillStyle = '#4f8cff';
@@ -239,6 +289,7 @@ function loop(timestamp) {
         }
         setMessage('');
       } else {
+        prevFaceCenter = null;
         setMessage('Show your face to the camera…');
       }
     }
@@ -272,8 +323,8 @@ async function start() {
     particles = [];
     leftWinking = false;
     rightWinking = false;
-    colorEffectIndex = 0;
-    if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[0].name;
+    prevFaceCenter = null;
+    prevFaceAt = 0;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
     await listCameras();

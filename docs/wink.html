@@ -18,13 +18,12 @@
   </header>
 
   <main>
-    <p class="hint">Wink one eye and emojis fly out of it in their original colors, while the rest of the view cycles through a color effect. Uses Google's MediaPipe Face Landmarker, running entirely in your browser &mdash; the first load downloads a small ML model, so it needs an internet connection once.</p>
+    <p class="hint">The view stays in sepia. Wink one eye and emojis fly out of it in their original colors, and moving your face warps a swirl around it &mdash; hold still and the warp settles. Uses Google's MediaPipe Face Landmarker, running entirely in your browser &mdash; the first load downloads a small ML model, so it needs an internet connection once.</p>
 
     <div class="video-wrap">
       <canvas id="winkCanvas"></canvas>
       <video id="video" autoplay playsinline muted class="pip mirror"></video>
       <p id="message" class="message"></p>
-      <span id="effectLabel" class="effect-badge">Normal</span>
     </div>
 
     <div class="controls">
