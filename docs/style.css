@@ -94,15 +94,21 @@ video.mirror {
 
 .exit-fullscreen {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 2;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  z-index: 10;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(15, 17, 21, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--text);
-  font-size: 0.85rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  border-radius: 50%;
   cursor: pointer;
 }
 
