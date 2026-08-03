@@ -212,3 +212,16 @@ button#stopBtn {
 .hidden {
   display: none;
 }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  accent-color: var(--accent);
+}
