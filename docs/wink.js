@@ -15,6 +15,7 @@ const stopBtn = document.getElementById('stopBtn');
 const saveBtn = document.getElementById('saveBtn');
 const statusEl = document.getElementById('status');
 const messageEl = document.getElementById('message');
+const effectLabelEl = document.getElementById('effectLabel');
 
 const MAX_DIMENSION = 480;
 const WINK_ON = 0.5; // eye counts as "closed" above this blendshape score
@@ -29,6 +30,17 @@ const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/was
 const RIGHT_EYE_IDX = [33, 133, 159, 145, 153, 144, 163, 7];
 const LEFT_EYE_IDX = [362, 263, 386, 374, 380, 373, 390, 249];
 
+const COLOR_EFFECTS = [
+  { name: 'Normal', filter: 'none' },
+  { name: 'Invert', filter: 'invert(1)' },
+  { name: 'Neon', filter: 'saturate(3) hue-rotate(90deg) contrast(1.2)' },
+  { name: 'Sepia Dream', filter: 'sepia(1) saturate(3) hue-rotate(300deg)' },
+  { name: 'Cool Blue', filter: 'hue-rotate(200deg) saturate(1.8)' },
+  { name: 'Grayscale Pop', filter: 'grayscale(1) contrast(1.4) brightness(1.1)' },
+  { name: 'Solarize', filter: 'invert(1) hue-rotate(180deg) saturate(2)' },
+  { name: 'Warm Glow', filter: 'sepia(0.6) saturate(2) hue-rotate(-20deg) brightness(1.1)' },
+];
+
 let currentStream = null;
 let rafId = null;
 let faceLandmarker = null;
@@ -36,6 +48,7 @@ let modelReady = false;
 let particles = [];
 let leftWinking = false;
 let rightWinking = false;
+let colorEffectIndex = 0;
 
 function setStatus(live) {
   statusEl.textContent = live ? 'Live' : 'Offline';
@@ -155,6 +168,18 @@ function updateAndDrawParticles(now, dtSec) {
   });
 }
 
+function cycleColorEffect() {
+  let next = colorEffectIndex;
+  if (COLOR_EFFECTS.length > 1) {
+    while (next === colorEffectIndex) {
+      next = Math.floor(Math.random() * COLOR_EFFECTS.length);
+    }
+  }
+  colorEffectIndex = next;
+  canvas.style.filter = COLOR_EFFECTS[colorEffectIndex].filter;
+  if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[colorEffectIndex].name;
+}
+
 function checkWinks(blendshapes, eyeL, eyeR) {
   if (!blendshapes) return;
   const categories = blendshapes.categories;
@@ -166,6 +191,7 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
   if (isLeftWink && !leftWinking) {
     spawnBurst(eyeL.x, eyeL.y);
+    cycleColorEffect();
     leftWinking = true;
   } else if (leftScore < WINK_OFF) {
     leftWinking = false;
@@ -173,6 +199,7 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
   if (isRightWink && !rightWinking) {
     spawnBurst(eyeR.x, eyeR.y);
+    cycleColorEffect();
     rightWinking = true;
   } else if (rightScore < WINK_OFF) {
     rightWinking = false;
@@ -243,6 +270,9 @@ async function start() {
     particles = [];
     leftWinking = false;
     rightWinking = false;
+    colorEffectIndex = 0;
+    canvas.style.filter = COLOR_EFFECTS[0].filter;
+    if (effectLabelEl) effectLabelEl.textContent = COLOR_EFFECTS[0].name;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
     await listCameras();
