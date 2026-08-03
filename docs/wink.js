@@ -32,13 +32,15 @@ const LEFT_EYE_IDX = [362, 263, 386, 374, 380, 373, 390, 249];
 const SEPIA_FILTER = 'sepia(1) saturate(3) hue-rotate(300deg)';
 
 // How much the face has to move (in canvas px/sec) before the swirl kicks in, and
-// how that speed maps to swirl strength. Tuned so small jitter doesn't trigger it.
-const FACE_DISTORT_SENSITIVITY = 0.02;
-const FACE_DISTORT_MAX_STRENGTH = 10;
-const FACE_DISTORT_MIN_STRENGTH = 0.4;
+// how that speed maps to swirl strength. Speed is smoothed so the swirl flows with
+// the motion instead of flickering on/off frame-to-frame.
+const FACE_DISTORT_SENSITIVITY = 0.09;
+const FACE_DISTORT_MAX_STRENGTH = 14;
+const FACE_DISTORT_MIN_STRENGTH = 0.15;
+const FACE_DISTORT_SMOOTHING = 0.75; // higher = more trailing/fluid, lower = snappier
 const FACE_DISTORT_RADIUS_MULTIPLIER = 2.2; // relative to eye distance, so it scales with face size
-const FACE_DISTORT_RADIUS_MIN = 40;
-const FACE_DISTORT_RADIUS_MAX = 220;
+const FACE_DISTORT_RADIUS_MIN = 50;
+const FACE_DISTORT_RADIUS_MAX = 260;
 const NOSE_TIP_IDX = 1;
 
 let currentStream = null;
@@ -50,6 +52,7 @@ let leftWinking = false;
 let rightWinking = false;
 let prevFaceCenter = null;
 let prevFaceAt = 0;
+let smoothedSpeed = 0;
 
 function setStatus(live) {
   statusEl.textContent = live ? 'Live' : 'Offline';
@@ -237,8 +240,9 @@ function applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp) {
     if (dtSec > 0) {
       const dx = faceCenter.x - prevFaceCenter.x;
       const dy = faceCenter.y - prevFaceCenter.y;
-      const speed = Math.hypot(dx, dy) / dtSec; // canvas px/sec
-      const strength = Math.min(FACE_DISTORT_MAX_STRENGTH, speed * FACE_DISTORT_SENSITIVITY);
+      const rawSpeed = Math.hypot(dx, dy) / dtSec; // canvas px/sec
+      smoothedSpeed = smoothedSpeed * FACE_DISTORT_SMOOTHING + rawSpeed * (1 - FACE_DISTORT_SMOOTHING);
+      const strength = Math.min(FACE_DISTORT_MAX_STRENGTH, smoothedSpeed * FACE_DISTORT_SENSITIVITY);
 
       if (strength > FACE_DISTORT_MIN_STRENGTH) {
         const eyeDist = Math.hypot(eyeR.x - eyeL.x, eyeR.y - eyeL.y);
@@ -290,6 +294,7 @@ function loop(timestamp) {
         setMessage('');
       } else {
         prevFaceCenter = null;
+        smoothedSpeed = 0;
         setMessage('Show your face to the camera…');
       }
     }
@@ -325,6 +330,7 @@ async function start() {
     rightWinking = false;
     prevFaceCenter = null;
     prevFaceAt = 0;
+    smoothedSpeed = 0;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
     await listCameras();
