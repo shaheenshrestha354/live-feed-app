@@ -73,11 +73,15 @@ main {
   position: relative;
 }
 
-video, #phoneFeed, #scanCanvas {
+video, #phoneFeed, #scanCanvas, #swirlCanvas, #winkCanvas {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+video.mirror {
+  transform: scaleX(-1);
 }
 
 .nav {
@@ -224,4 +228,22 @@ button#stopBtn {
 
 .checkbox-label input {
   accent-color: var(--accent);
+}
+
+.controls.full-width {
+  flex-direction: column;
+}
+
+.slider-label.full-width {
+  width: 100%;
+}
+
+input[type="text"] {
+  font-size: 0.95rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #2a2e37;
+  background: var(--panel);
+  color: var(--text);
+  width: 100%;
 }

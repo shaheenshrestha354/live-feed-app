@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wink Words</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Wink Words</h1>
+    <nav class="nav">
+      <a href="index.html">Live Feed</a>
+      <a href="slitscan.html">Slitscan</a>
+      <a href="swirl.html">Hand Swirl</a>
+    </nav>
+    <span id="status" class="status offline">Offline</span>
+  </header>
+
+  <main>
+    <p class="hint">Wink one eye and words fly out of it. Uses Google's MediaPipe Face Landmarker, running entirely in your browser &mdash; the first load downloads a small ML model, so it needs an internet connection once.</p>
+
+    <div class="video-wrap">
+      <canvas id="winkCanvas"></canvas>
+      <video id="video" autoplay playsinline muted class="pip mirror"></video>
+      <p id="message" class="message"></p>
+    </div>
+
+    <div class="controls">
+      <select id="cameraSelect"></select>
+      <label class="checkbox-label"><input type="checkbox" id="showLandmarks" checked> Show eye tracking</label>
+    </div>
+
+    <div class="controls full-width">
+      <label class="slider-label full-width">Words (comma-separated)
+        <input type="text" id="wordListInput" value="POW!, WOW!, MAGIC, BOOM, ZAP!, WINK!, SURPRISE, ✨">
+      </label>
+    </div>
+
+    <div class="controls">
+      <label class="slider-label">Words per wink: <span id="countLabel"></span>
+        <input type="range" id="countSlider" min="1" max="8" value="4">
+      </label>
+      <label class="slider-label">Word size: <span id="sizeLabel"></span>
+        <input type="range" id="sizeSlider" min="14" max="48" value="26">
+      </label>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="saveBtn" disabled>Save PNG</button>
+    </div>
+  </main>
+
+  <script type="module" src="wink.js"></script>
+</body>
+</html>
