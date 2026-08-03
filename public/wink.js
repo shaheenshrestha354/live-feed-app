@@ -29,7 +29,14 @@ const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/was
 const RIGHT_EYE_IDX = [33, 133, 159, 145, 153, 144, 163, 7];
 const LEFT_EYE_IDX = [362, 263, 386, 374, 380, 373, 390, 249];
 
-const SEPIA_FILTER = 'sepia(1) saturate(3) hue-rotate(300deg)';
+// The view is split into a 2x2 grid; each quadrant always renders with its own
+// distinct color effect (fixed order: top-left, top-right, bottom-left, bottom-right).
+const GRID_EFFECTS = [
+  { name: 'Normal', filter: 'none' },
+  { name: 'Invert', filter: 'invert(1)' },
+  { name: 'Sepia', filter: 'sepia(1) saturate(3) hue-rotate(300deg)' },
+  { name: 'Neon', filter: 'saturate(3) hue-rotate(90deg) contrast(1.2)' },
+];
 
 // How much the face has to move (in canvas px/sec) before the swirl kicks in, and
 // how that speed maps to swirl strength. Speed is smoothed so the swirl flows with
@@ -260,17 +267,47 @@ function applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp) {
   prevFaceAt = timestamp;
 }
 
-function loop(timestamp) {
-  if (video.videoWidth && video.videoHeight) {
-    // Mirror the camera for a natural "look in a mirror" feel. The sepia effect
-    // is applied only to this draw call so particles drawn afterward (emoji)
-    // always render in their true, unfiltered color.
+function drawGridVideo() {
+  const halfW = canvas.width / 2;
+  const halfH = canvas.height / 2;
+  const quadrants = [
+    { x: 0, y: 0, w: halfW, h: halfH }, // top-left
+    { x: halfW, y: 0, w: canvas.width - halfW, h: halfH }, // top-right
+    { x: 0, y: halfH, w: halfW, h: canvas.height - halfH }, // bottom-left
+    { x: halfW, y: halfH, w: canvas.width - halfW, h: canvas.height - halfH }, // bottom-right
+  ];
+
+  // Mirror the camera for a natural "look in a mirror" feel. Each quadrant is
+  // clipped and redrawn with its own filter; the color effects are applied
+  // only to these draw calls so particles drawn afterward (emoji) always
+  // render in their true, unfiltered color.
+  quadrants.forEach((q, i) => {
     ctx.save();
-    ctx.filter = SEPIA_FILTER;
+    ctx.beginPath();
+    ctx.rect(q.x, q.y, q.w, q.h);
+    ctx.clip();
+    ctx.filter = GRID_EFFECTS[i].filter;
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
+  });
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(halfW, 0);
+  ctx.lineTo(halfW, canvas.height);
+  ctx.moveTo(0, halfH);
+  ctx.lineTo(canvas.width, halfH);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function loop(timestamp) {
+  if (video.videoWidth && video.videoHeight) {
+    drawGridVideo();
 
     if (faceLandmarker) {
       const result = faceLandmarker.detectForVideo(video, timestamp);
