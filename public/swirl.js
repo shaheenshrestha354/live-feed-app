@@ -14,6 +14,9 @@ const stopBtn = document.getElementById('stopBtn');
 const saveBtn = document.getElementById('saveBtn');
 const statusEl = document.getElementById('status');
 const messageEl = document.getElementById('message');
+const videoWrap = document.getElementById('videoWrap');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const exitFullscreenBtn = document.getElementById('exitFullscreenBtn');
 
 const MAX_DIMENSION = 400;
 const HAND_HOLD_MS = 500; // keep swirling at the last known spot briefly after the hand drops out
@@ -234,6 +237,24 @@ function saveImage() {
   }, 'image/png');
 }
 
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen() {
+  if (!isFullscreen()) {
+    (videoWrap.requestFullscreen || videoWrap.webkitRequestFullscreen)?.call(videoWrap);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+  }
+}
+
+function onFullscreenChange() {
+  const fs = isFullscreen();
+  exitFullscreenBtn.classList.toggle('hidden', !fs);
+  fullscreenBtn.textContent = fs ? 'Exit Fullscreen' : 'Fullscreen';
+}
+
 strengthSlider.addEventListener('input', () => {
   strengthLabel.textContent = strengthSlider.value;
 });
@@ -244,6 +265,10 @@ radiusSlider.addEventListener('input', () => {
 startBtn.addEventListener('click', start);
 stopBtn.addEventListener('click', stop);
 saveBtn.addEventListener('click', saveImage);
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+exitFullscreenBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
 (async function init() {
   strengthLabel.textContent = strengthSlider.value;

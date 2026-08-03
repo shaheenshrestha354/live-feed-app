@@ -20,15 +20,17 @@
   <main>
     <p class="hint">Tracks your hand and warps the video into a swirl centered on it. Uses Google's MediaPipe Hand Landmarker, running entirely in your browser &mdash; the first load downloads a small ML model, so it needs an internet connection once.</p>
 
-    <div class="video-wrap">
+    <div class="video-wrap" id="videoWrap">
       <canvas id="swirlCanvas"></canvas>
       <video id="video" autoplay playsinline muted class="pip"></video>
       <p id="message" class="message"></p>
+      <button id="exitFullscreenBtn" class="exit-fullscreen hidden">✕ Exit Fullscreen</button>
     </div>
 
     <div class="controls">
       <select id="cameraSelect"></select>
       <label class="checkbox-label"><input type="checkbox" id="showLandmarks" checked> Show hand tracking</label>
+      <button id="fullscreenBtn">Fullscreen</button>
     </div>
 
     <div class="controls">
