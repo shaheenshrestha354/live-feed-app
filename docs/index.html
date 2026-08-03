@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Feed</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Feed</h1>
+    <span id="status" class="status offline">Offline</span>
+  </header>
+
+  <main>
+    <p class="hint">This hosted version shows your device's own camera only. Phone-to-laptop streaming needs the server running locally &mdash; see the <a href="https://github.com/shaheenshrestha354/live-feed-app">README</a>.</p>
+
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <p id="message" class="message"></p>
+    </div>
+
+    <div id="laptopControls" class="controls">
+      <select id="cameraSelect"></select>
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="snapshotBtn" disabled>Snapshot</button>
+    </div>
+
+    <canvas id="canvas" class="hidden"></canvas>
+    <a id="downloadLink" class="hidden" download="snapshot.png"></a>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
