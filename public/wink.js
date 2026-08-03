@@ -29,26 +29,79 @@ const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/was
 const RIGHT_EYE_IDX = [33, 133, 159, 145, 153, 144, 163, 7];
 const LEFT_EYE_IDX = [362, 263, 386, 374, 380, 373, 390, 249];
 
+// Color effects are applied via direct pixel manipulation rather than the
+// canvas 2D context's `filter` property, since that property has unreliable
+// or missing support in some browsers (notably Safari). Each function mutates
+// an RGBA pixel in place (data/idx point at the R channel of that pixel).
+function pixelNormal() {}
+
+function pixelInvert(data, idx) {
+  data[idx] = 255 - data[idx];
+  data[idx + 1] = 255 - data[idx + 1];
+  data[idx + 2] = 255 - data[idx + 2];
+}
+
+function pixelSepia(data, idx) {
+  const r = data[idx];
+  const g = data[idx + 1];
+  const b = data[idx + 2];
+  data[idx] = 0.393 * r + 0.769 * g + 0.189 * b;
+  data[idx + 1] = 0.349 * r + 0.686 * g + 0.168 * b;
+  data[idx + 2] = 0.272 * r + 0.534 * g + 0.131 * b;
+}
+
+// Precomputed saturate(3) + hue-rotate(90deg) color matrix (standard CSS Filter
+// Effects formulas), applied per-pixel, followed by a contrast(1.2) boost.
+function saturateMatrix(s) {
+  return [
+    0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s,
+    0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s,
+    0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s,
+  ];
+}
+function hueRotateMatrix(deg) {
+  const rad = (deg * Math.PI) / 180;
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  return [
+    0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
+    0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
+    0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072,
+  ];
+}
+function multiplyMatrices3x3(a, b) {
+  const out = new Array(9).fill(0);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      let sum = 0;
+      for (let k = 0; k < 3; k++) sum += a[row * 3 + k] * b[k * 3 + col];
+      out[row * 3 + col] = sum;
+    }
+  }
+  return out;
+}
+const NEON_MATRIX = multiplyMatrices3x3(hueRotateMatrix(90), saturateMatrix(3));
+
+function pixelNeon(data, idx) {
+  const r = data[idx];
+  const g = data[idx + 1];
+  const b = data[idx + 2];
+  const nr = NEON_MATRIX[0] * r + NEON_MATRIX[1] * g + NEON_MATRIX[2] * b;
+  const ng = NEON_MATRIX[3] * r + NEON_MATRIX[4] * g + NEON_MATRIX[5] * b;
+  const nb = NEON_MATRIX[6] * r + NEON_MATRIX[7] * g + NEON_MATRIX[8] * b;
+  data[idx] = (nr - 128) * 1.2 + 128;
+  data[idx + 1] = (ng - 128) * 1.2 + 128;
+  data[idx + 2] = (nb - 128) * 1.2 + 128;
+}
+
 // The view is split into a 2x2 grid; each quadrant always renders with its own
 // distinct color effect (fixed order: top-left, top-right, bottom-left, bottom-right).
 const GRID_EFFECTS = [
-  { name: 'Normal', filter: 'none' },
-  { name: 'Invert', filter: 'invert(1)' },
-  { name: 'Sepia', filter: 'sepia(1) saturate(3) hue-rotate(300deg)' },
-  { name: 'Neon', filter: 'saturate(3) hue-rotate(90deg) contrast(1.2)' },
+  { name: 'Normal', apply: pixelNormal },
+  { name: 'Invert', apply: pixelInvert },
+  { name: 'Sepia', apply: pixelSepia },
+  { name: 'Neon', apply: pixelNeon },
 ];
-
-// How much the face has to move (in canvas px/sec) before the swirl kicks in, and
-// how that speed maps to swirl strength. Speed is smoothed so the swirl flows with
-// the motion instead of flickering on/off frame-to-frame.
-const FACE_DISTORT_SENSITIVITY = 0.09;
-const FACE_DISTORT_MAX_STRENGTH = 14;
-const FACE_DISTORT_MIN_STRENGTH = 0.15;
-const FACE_DISTORT_SMOOTHING = 0.75; // higher = more trailing/fluid, lower = snappier
-const FACE_DISTORT_RADIUS_MULTIPLIER = 2.2; // relative to eye distance, so it scales with face size
-const FACE_DISTORT_RADIUS_MIN = 50;
-const FACE_DISTORT_RADIUS_MAX = 260;
-const NOSE_TIP_IDX = 1;
 
 let currentStream = null;
 let rafId = null;
@@ -57,9 +110,6 @@ let modelReady = false;
 let particles = [];
 let leftWinking = false;
 let rightWinking = false;
-let prevFaceCenter = null;
-let prevFaceAt = 0;
-let smoothedSpeed = 0;
 
 function setStatus(live) {
   statusEl.textContent = live ? 'Live' : 'Offline';
@@ -135,40 +185,6 @@ function eyeCenter(landmarks, indices) {
   return { x: canvas.width - rawX, y: rawY };
 }
 
-function applySwirl(imageData, width, height, cx, cy, radius, angle) {
-  const src = imageData.data;
-  const out = new Uint8ClampedArray(src);
-  const minX = Math.max(0, Math.floor(cx - radius));
-  const maxX = Math.min(width - 1, Math.ceil(cx + radius));
-  const minY = Math.max(0, Math.floor(cy - radius));
-  const maxY = Math.min(height - 1, Math.ceil(cy + radius));
-  const radius2 = radius * radius;
-
-  for (let y = minY; y <= maxY; y++) {
-    const dy0 = y - cy;
-    for (let x = minX; x <= maxX; x++) {
-      const dx0 = x - cx;
-      const d2 = dx0 * dx0 + dy0 * dy0;
-      if (d2 > radius2) continue;
-      const d = Math.sqrt(d2);
-      const percent = (radius - d) / radius;
-      const theta = percent * percent * angle;
-      const cosT = Math.cos(theta);
-      const sinT = Math.sin(theta);
-      const srcX = Math.round(cx + dx0 * cosT - dy0 * sinT);
-      const srcY = Math.round(cy + dx0 * sinT + dy0 * cosT);
-      if (srcX < 0 || srcX >= width || srcY < 0 || srcY >= height) continue;
-      const srcIdx = (srcY * width + srcX) * 4;
-      const dstIdx = (y * width + x) * 4;
-      out[dstIdx] = src[srcIdx];
-      out[dstIdx + 1] = src[srcIdx + 1];
-      out[dstIdx + 2] = src[srcIdx + 2];
-      out[dstIdx + 3] = src[srcIdx + 3];
-    }
-  }
-  return new ImageData(out, width, height);
-}
-
 function spawnBurst(cx, cy) {
   const words = getWordList();
   const count = Number(countSlider.value);
@@ -200,7 +216,6 @@ function updateAndDrawParticles(now, dtSec) {
     const scale = 1 + progress * 0.6;
 
     ctx.save();
-    ctx.filter = 'none'; // always draw particles in their true color, regardless of the sepia effect
     ctx.globalAlpha = Math.max(0, alpha);
     ctx.translate(p.x, p.y);
     ctx.scale(scale, scale);
@@ -239,59 +254,32 @@ function checkWinks(blendshapes, eyeL, eyeR) {
 
 let lastFrameAt = 0;
 
-function applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp) {
-  const faceCenter = eyeCenter(landmarks, [NOSE_TIP_IDX]);
+function drawGridVideo() {
+  const halfW = Math.round(canvas.width / 2);
+  const halfH = Math.round(canvas.height / 2);
 
-  if (prevFaceCenter) {
-    const dtSec = (timestamp - prevFaceAt) / 1000;
-    if (dtSec > 0) {
-      const dx = faceCenter.x - prevFaceCenter.x;
-      const dy = faceCenter.y - prevFaceCenter.y;
-      const rawSpeed = Math.hypot(dx, dy) / dtSec; // canvas px/sec
-      smoothedSpeed = smoothedSpeed * FACE_DISTORT_SMOOTHING + rawSpeed * (1 - FACE_DISTORT_SMOOTHING);
-      const strength = Math.min(FACE_DISTORT_MAX_STRENGTH, smoothedSpeed * FACE_DISTORT_SENSITIVITY);
+  // Mirror the camera for a natural "look in a mirror" feel, drawn once as a
+  // plain frame. The per-quadrant color effects are then applied directly to
+  // the pixel data (not via the canvas `filter` property, which has unreliable
+  // support in some browsers), so particles drawn afterward (emoji) are
+  // unaffected since they're drawn fresh on top, not part of this pixel pass.
+  ctx.save();
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
 
-      if (strength > FACE_DISTORT_MIN_STRENGTH) {
-        const eyeDist = Math.hypot(eyeR.x - eyeL.x, eyeR.y - eyeL.y);
-        const radius = Math.min(
-          FACE_DISTORT_RADIUS_MAX,
-          Math.max(FACE_DISTORT_RADIUS_MIN, eyeDist * FACE_DISTORT_RADIUS_MULTIPLIER)
-        );
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const warped = applySwirl(frame, canvas.width, canvas.height, faceCenter.x, faceCenter.y, radius, strength);
-        ctx.putImageData(warped, 0, 0);
-      }
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = frame.data;
+  for (let y = 0; y < canvas.height; y++) {
+    const effectRow = y < halfH ? 0 : 1;
+    for (let x = 0; x < canvas.width; x++) {
+      const effectCol = x < halfW ? 0 : 1;
+      const idx = (y * canvas.width + x) * 4;
+      GRID_EFFECTS[effectRow * 2 + effectCol].apply(data, idx);
     }
   }
-  prevFaceCenter = faceCenter;
-  prevFaceAt = timestamp;
-}
-
-function drawGridVideo() {
-  const halfW = canvas.width / 2;
-  const halfH = canvas.height / 2;
-  const quadrants = [
-    { x: 0, y: 0, w: halfW, h: halfH }, // top-left
-    { x: halfW, y: 0, w: canvas.width - halfW, h: halfH }, // top-right
-    { x: 0, y: halfH, w: halfW, h: canvas.height - halfH }, // bottom-left
-    { x: halfW, y: halfH, w: canvas.width - halfW, h: canvas.height - halfH }, // bottom-right
-  ];
-
-  // Mirror the camera for a natural "look in a mirror" feel. Each quadrant is
-  // clipped and redrawn with its own filter; the color effects are applied
-  // only to these draw calls so particles drawn afterward (emoji) always
-  // render in their true, unfiltered color.
-  quadrants.forEach((q, i) => {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(q.x, q.y, q.w, q.h);
-    ctx.clip();
-    ctx.filter = GRID_EFFECTS[i].filter;
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  });
+  ctx.putImageData(frame, 0, 0);
 
   ctx.save();
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
@@ -318,7 +306,6 @@ function loop(timestamp) {
         const eyeL = eyeCenter(landmarks, LEFT_EYE_IDX);
         const eyeR = eyeCenter(landmarks, RIGHT_EYE_IDX);
         checkWinks(blendshapes, eyeL, eyeR);
-        applyFaceMotionDistortion(landmarks, eyeL, eyeR, timestamp);
 
         if (showLandmarksCheckbox.checked) {
           ctx.fillStyle = '#4f8cff';
@@ -330,8 +317,6 @@ function loop(timestamp) {
         }
         setMessage('');
       } else {
-        prevFaceCenter = null;
-        smoothedSpeed = 0;
         setMessage('Show your face to the camera…');
       }
     }
@@ -365,9 +350,6 @@ async function start() {
     particles = [];
     leftWinking = false;
     rightWinking = false;
-    prevFaceCenter = null;
-    prevFaceAt = 0;
-    smoothedSpeed = 0;
     lastFrameAt = 0;
     rafId = requestAnimationFrame(loop);
     await listCameras();
