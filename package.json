@@ -1,0 +1,14 @@
+{
+  "name": "live-feed-app",
+  "version": "1.0.0",
+  "description": "Local web app that shows a live webcam feed, served from this laptop.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "selfsigned": "^2.4.1"
+  }
+}

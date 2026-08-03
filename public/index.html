@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Feed</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Feed</h1>
+    <span id="status" class="status offline">Offline</span>
+  </header>
+
+  <main>
+    <div class="source-toggle">
+      <label><input type="radio" name="source" value="laptop" checked> This laptop's camera</label>
+      <label><input type="radio" name="source" value="phone"> Phone camera</label>
+    </div>
+
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <img id="phoneFeed" class="hidden" alt="Phone camera feed">
+      <p id="message" class="message"></p>
+    </div>
+
+    <div id="laptopControls" class="controls">
+      <select id="cameraSelect"></select>
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="snapshotBtn" disabled>Snapshot</button>
+    </div>
+
+    <div id="phoneControls" class="phone-info hidden">
+      <p>On your phone (same WiFi), open:</p>
+      <ul id="phoneUrls" class="phone-urls"></ul>
+      <p class="hint">Your phone's browser will warn about the certificate the first time &mdash; tap "Advanced" / "Visit site" to continue, then allow camera access.</p>
+    </div>
+
+    <canvas id="canvas" class="hidden"></canvas>
+    <a id="downloadLink" class="hidden" download="snapshot.png"></a>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
